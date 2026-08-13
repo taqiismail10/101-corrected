@@ -1,6 +1,6 @@
-# Corrected Simulation Lab Solutions - Azim
+# 101 - Corrected
 
-This corrected package replaces the OS-lab code found in the uploaded cheat101 ZIP with C solutions for the **Simulation Lab Question Archive Azim**.
+This corrected package replaces the OS-lab code found in the uploaded cheat101 ZIP with C solutions for the **Simulation Lab Question Archive**.
 
 ## Files
 
