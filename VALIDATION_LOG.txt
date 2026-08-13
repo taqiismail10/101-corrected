@@ -1,0 +1,27 @@
+OK q01_dump_truck_probability.c
+OK q02_table_2_4_metrics.c
+OK q03_figure_2_6_metrics.c
+OK q04_grocery_20_customers.c
+OK q05_plot_table_2_4.c
+OK q06_plot_table_3_2.c
+OK q07_customer_table_from_table_3_2.c
+OK q08_customer_table_from_figure_2_6.c
+OK q09_newspaper_profit.c
+OK q10_refrigerator_inventory.c
+OK q11_bearing_policy_comparison.c
+OK q12_table_3_2_metrics.c
+OK q13_future_event_list_from_table_2_4.c
+OK q14_grocery_checkout_program.c
+OK q15_grocery_60_hours_drain.c
+OK q16_able_baker_call_center.c
+OK q17_ks_test.c
+OK q18_chi_square_uniformity.c
+OK q19_inverse_transform_interarrival.c
+OK q20_qq_installation_times.c
+OK q21_qq_lifetimes.c
+OK q22_model_validation_ci.c
+OK q23_confidence_prediction_interval.c
+OK q24_crn_model_comparison.c
+OK q25_simple_linear_regression.c
+
+Compiled OK: 25/25

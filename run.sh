@@ -1,0 +1,1784 @@
+# run.sh
+
+#!/bin/bash
+# Corrected Simulation Lab Question Archive Azim solutions
+# Structure follows the uploaded cheat101 ZIP: code[], runner[], name[], -n, -p, -r.
+
+declare -a code
+declare -a runner
+declare -a name
+
+code[0]=$(cat <<'EOF_CODE_0'
+#include <stdio.h>
+
+int main(void) {
+    int travel[] = {110, 130, 170, 180};
+    int low[]    = {  1,  36,  76,  91};
+    int high[]   = { 35,  75,  90, 100}; /* 00 is treated as 100 */
+    int n = 4;
+    double cumulative = 0.0;
+
+    printf("TRAVEL_TIME PROBABILITY CUMULATIVE_PROBABILITY RANDOM_NUMBER\n");
+    for (int i = 0; i < n; i++) {
+        int count = high[i] - low[i] + 1;
+        double p = count / 100.0;
+        cumulative += p;
+        printf("%d %.2f %.2f %02d-%02d\n", travel[i], p, cumulative,
+               low[i] == 100 ? 0 : low[i], high[i] == 100 ? 0 : high[i]);
+    }
+    printf("OK: TOTAL_PROBABILITY %.2f\n", cumulative);
+    return 0;
+}
+EOF_CODE_0
+)
+
+code[1]=$(cat <<'EOF_CODE_1'
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+double mean_int(int a[], int n) {
+    double s = 0;
+    for (int i = 0; i < n; i++) s += a[i];
+    return s / n;
+}
+
+double variance_int(int a[], int n) {
+    double m = mean_int(a, n), s = 0;
+    for (int i = 0; i < n; i++) s += (a[i] - m) * (a[i] - m);
+    return s / n;
+}
+
+int cmp_int(const void *a, const void *b) {
+    return (*(int *)a - *(int *)b);
+}
+
+double time_average(int start[], int end[], int n, int T) {
+    int times[256], m = 0;
+    times[m++] = 0;
+    times[m++] = T;
+    for (int i = 0; i < n; i++) {
+        times[m++] = start[i];
+        times[m++] = end[i];
+    }
+    qsort(times, m, sizeof(int), cmp_int);
+    int unique[256], u = 0;
+    for (int i = 0; i < m; i++) {
+        if (i == 0 || times[i] != times[i - 1]) unique[u++] = times[i];
+    }
+
+    double area = 0.0;
+    for (int i = 0; i < u - 1; i++) {
+        int t1 = unique[i], t2 = unique[i + 1];
+        int count = 0;
+        for (int j = 0; j < n; j++) {
+            if (start[j] <= t1 && end[j] > t1) count++;
+        }
+        area += count * (t2 - t1);
+    }
+    return area / T;
+}
+
+void solve(const char *title, int arrival[], int begin[], int end[], int n) {
+    int service[64], wait[64], system[64], inter[64];
+    int waited = 0, total_service = 0, total_wait = 0, total_system = 0;
+    int q_start[64], q_end[64], qn = 0;
+
+    inter[0] = arrival[0];
+    for (int i = 0; i < n; i++) {
+        service[i] = end[i] - begin[i];
+        wait[i] = begin[i] - arrival[i];
+        system[i] = end[i] - arrival[i];
+        if (i > 0) inter[i] = arrival[i] - arrival[i - 1];
+        if (wait[i] > 0) {
+            waited++;
+            q_start[qn] = arrival[i];
+            q_end[qn] = begin[i];
+            qn++;
+        }
+        total_service += service[i];
+        total_wait += wait[i];
+        total_system += system[i];
+    }
+
+    int T = end[n - 1];
+    double L = time_average(arrival, end, n, T);
+    double Lq = qn ? time_average(q_start, q_end, qn, T) : 0.0;
+    double util = (double)total_service / T;
+    double var_inter = variance_int(inter + 1, n - 1);
+    double var_service = variance_int(service, n);
+    double var_system = variance_int(system, n);
+
+    printf("CASE: %s\n", title);
+    printf("CUSTOMER ARRIVAL BEGIN END SERVICE WAIT SYSTEM\n");
+    for (int i = 0; i < n; i++) {
+        printf("%d %d %d %d %d %d %d\n", i + 1, arrival[i], begin[i], end[i], service[i], wait[i], system[i]);
+    }
+
+    printf("OK: WAITED_PERCENT %.2f\n", 100.0 * waited / n);
+    printf("OK: SERVER_UTILIZATION %.2f\n", util);
+    printf("OK: AVG_SYSTEM_TIME %.2f\n", (double)total_system / n);
+    printf("OK: AVG_QUEUE_TIME %.2f\n", (double)total_wait / n);
+    printf("OK: AVG_INTERARRIVAL_TIME %.2f\n", mean_int(inter + 1, n - 1));
+    printf("OK: AVG_SERVICE_TIME %.2f\n", mean_int(service, n));
+    printf("OK: EXPECTED_INTERARRIVAL_TIME %.2f\n", mean_int(inter + 1, n - 1));
+    printf("OK: EXPECTED_SERVICE_TIME %.2f\n", mean_int(service, n));
+    printf("OK: VAR_INTERARRIVAL %.2f STD_INTERARRIVAL %.2f\n", var_inter, sqrt(var_inter));
+    printf("OK: VAR_SERVICE %.2f STD_SERVICE %.2f\n", var_service, sqrt(var_service));
+    printf("OK: AVG_NUMBER_SYSTEM %.2f\n", L);
+    printf("OK: AVG_NUMBER_QUEUE %.2f\n", Lq);
+
+    if (waited > 0) {
+        int waited_times[64], k = 0;
+        for (int i = 0; i < n; i++) if (wait[i] > 0) waited_times[k++] = wait[i];
+        double vw = variance_int(waited_times, k);
+        printf("OK: AVG_WAIT_OF_WAITED %.2f STD_WAIT_OF_WAITED %.2f\n", mean_int(waited_times, k), sqrt(vw));
+    } else {
+        printf("OK: AVG_WAIT_OF_WAITED 0.00 STD_WAIT_OF_WAITED 0.00\n");
+    }
+
+    printf("OK: VAR_SYSTEM_TIME %.2f CV_SYSTEM_TIME %.2f\n", var_system,
+           mean_int(system, n) == 0 ? 0.0 : sqrt(var_system) / mean_int(system, n));
+}
+
+int main(void) {
+    int arrival[] = {0, 2, 6, 7, 9, 15};
+    int begin[]   = {0, 2, 6, 9, 11, 15};
+    int end[]     = {2, 3, 9, 11, 12, 19};
+    solve("TEXTBOOK_TABLE_2_4", arrival, begin, end, 6);
+    return 0;
+}
+EOF_CODE_1
+)
+
+code[2]=$(cat <<'EOF_CODE_2'
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+double mean_int(int a[], int n) {
+    double s = 0;
+    for (int i = 0; i < n; i++) s += a[i];
+    return s / n;
+}
+
+double variance_int(int a[], int n) {
+    double m = mean_int(a, n), s = 0;
+    for (int i = 0; i < n; i++) s += (a[i] - m) * (a[i] - m);
+    return s / n;
+}
+
+int cmp_int(const void *a, const void *b) {
+    return (*(int *)a - *(int *)b);
+}
+
+double time_average(int start[], int end[], int n, int T) {
+    int times[256], m = 0;
+    times[m++] = 0;
+    times[m++] = T;
+    for (int i = 0; i < n; i++) {
+        times[m++] = start[i];
+        times[m++] = end[i];
+    }
+    qsort(times, m, sizeof(int), cmp_int);
+    int unique[256], u = 0;
+    for (int i = 0; i < m; i++) {
+        if (i == 0 || times[i] != times[i - 1]) unique[u++] = times[i];
+    }
+
+    double area = 0.0;
+    for (int i = 0; i < u - 1; i++) {
+        int t1 = unique[i], t2 = unique[i + 1];
+        int count = 0;
+        for (int j = 0; j < n; j++) {
+            if (start[j] <= t1 && end[j] > t1) count++;
+        }
+        area += count * (t2 - t1);
+    }
+    return area / T;
+}
+
+void solve(const char *title, int arrival[], int begin[], int end[], int n) {
+    int service[64], wait[64], system[64], inter[64];
+    int waited = 0, total_service = 0, total_wait = 0, total_system = 0;
+    int q_start[64], q_end[64], qn = 0;
+
+    inter[0] = arrival[0];
+    for (int i = 0; i < n; i++) {
+        service[i] = end[i] - begin[i];
+        wait[i] = begin[i] - arrival[i];
+        system[i] = end[i] - arrival[i];
+        if (i > 0) inter[i] = arrival[i] - arrival[i - 1];
+        if (wait[i] > 0) {
+            waited++;
+            q_start[qn] = arrival[i];
+            q_end[qn] = begin[i];
+            qn++;
+        }
+        total_service += service[i];
+        total_wait += wait[i];
+        total_system += system[i];
+    }
+
+    int T = end[n - 1];
+    double L = time_average(arrival, end, n, T);
+    double Lq = qn ? time_average(q_start, q_end, qn, T) : 0.0;
+    double util = (double)total_service / T;
+    double var_inter = variance_int(inter + 1, n - 1);
+    double var_service = variance_int(service, n);
+    double var_system = variance_int(system, n);
+
+    printf("CASE: %s\n", title);
+    printf("CUSTOMER ARRIVAL BEGIN END SERVICE WAIT SYSTEM\n");
+    for (int i = 0; i < n; i++) {
+        printf("%d %d %d %d %d %d %d\n", i + 1, arrival[i], begin[i], end[i], service[i], wait[i], system[i]);
+    }
+
+    printf("OK: WAITED_PERCENT %.2f\n", 100.0 * waited / n);
+    printf("OK: SERVER_UTILIZATION %.2f\n", util);
+    printf("OK: AVG_SYSTEM_TIME %.2f\n", (double)total_system / n);
+    printf("OK: AVG_QUEUE_TIME %.2f\n", (double)total_wait / n);
+    printf("OK: AVG_INTERARRIVAL_TIME %.2f\n", mean_int(inter + 1, n - 1));
+    printf("OK: AVG_SERVICE_TIME %.2f\n", mean_int(service, n));
+    printf("OK: EXPECTED_INTERARRIVAL_TIME %.2f\n", mean_int(inter + 1, n - 1));
+    printf("OK: EXPECTED_SERVICE_TIME %.2f\n", mean_int(service, n));
+    printf("OK: VAR_INTERARRIVAL %.2f STD_INTERARRIVAL %.2f\n", var_inter, sqrt(var_inter));
+    printf("OK: VAR_SERVICE %.2f STD_SERVICE %.2f\n", var_service, sqrt(var_service));
+    printf("OK: AVG_NUMBER_SYSTEM %.2f\n", L);
+    printf("OK: AVG_NUMBER_QUEUE %.2f\n", Lq);
+
+    if (waited > 0) {
+        int waited_times[64], k = 0;
+        for (int i = 0; i < n; i++) if (wait[i] > 0) waited_times[k++] = wait[i];
+        double vw = variance_int(waited_times, k);
+        printf("OK: AVG_WAIT_OF_WAITED %.2f STD_WAIT_OF_WAITED %.2f\n", mean_int(waited_times, k), sqrt(vw));
+    } else {
+        printf("OK: AVG_WAIT_OF_WAITED 0.00 STD_WAIT_OF_WAITED 0.00\n");
+    }
+
+    printf("OK: VAR_SYSTEM_TIME %.2f CV_SYSTEM_TIME %.2f\n", var_system,
+           mean_int(system, n) == 0 ? 0.0 : sqrt(var_system) / mean_int(system, n));
+}
+
+int main(void) {
+    int arrival[] = {0, 2, 6, 7, 9, 15};
+    int begin[]   = {0, 2, 6, 9, 11, 15};
+    int end[]     = {2, 3, 9, 11, 12, 19};
+    solve("FIGURE_2_6", arrival, begin, end, 6);
+    return 0;
+}
+EOF_CODE_2
+)
+
+code[3]=$(cat <<'EOF_CODE_3'
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+int map_interarrival(int rn) {
+    rn %= 1000;
+    if (rn <= 125) return 1;
+    if (rn <= 250) return 2;
+    if (rn <= 375) return 3;
+    if (rn <= 500) return 4;
+    if (rn <= 625) return 5;
+    if (rn <= 750) return 6;
+    if (rn <= 875) return 7;
+    return 8;
+}
+
+int map_service(int rn) {
+    rn %= 100;
+    if (rn == 0) rn = 100;
+    if (rn <= 10) return 1;
+    if (rn <= 30) return 2;
+    if (rn <= 60) return 3;
+    if (rn <= 85) return 4;
+    if (rn <= 95) return 5;
+    return 6;
+}
+
+double mean(int a[], int n) { double s = 0; for (int i = 0; i < n; i++) s += a[i]; return s / n; }
+double var(int a[], int n) { double m = mean(a,n), s = 0; for (int i = 0; i < n; i++) s += (a[i]-m)*(a[i]-m); return s / n; }
+
+int main(void) {
+    int n = 20;
+    int inter_rn[20] = {0,64,112,678,289,871,583,139,423,39,413,462,843,738,359,888,902,212,477,991};
+    int serv_rn[20]  = {84,18,76,82,56,30,5,92,55,25,94,32,71,46,69,27,80,61,47,10};
+    int inter[20], service[20], arrival[20], begin[20], end[20], wait[20], system[20];
+    int total_wait = 0, total_sys = 0, waited = 0, total_service = 0;
+
+    arrival[0] = 0;
+    for (int i = 0; i < n; i++) {
+        inter[i] = (i == 0) ? 0 : map_interarrival(inter_rn[i]);
+        service[i] = map_service(serv_rn[i]);
+        if (i > 0) arrival[i] = arrival[i - 1] + inter[i];
+        begin[i] = (i == 0 || arrival[i] > end[i - 1]) ? arrival[i] : end[i - 1];
+        end[i] = begin[i] + service[i];
+        wait[i] = begin[i] - arrival[i];
+        system[i] = end[i] - arrival[i];
+        total_wait += wait[i];
+        total_sys += system[i];
+        total_service += service[i];
+        if (wait[i] > 0) waited++;
+    }
+
+    printf("CUSTOMER IA_RN INTERARRIVAL ARRIVAL SERV_RN SERVICE BEGIN WAIT END SYSTEM\n");
+    for (int i = 0; i < n; i++) {
+        printf("%d %03d %d %d %02d %d %d %d %d %d\n", i+1, inter_rn[i], inter[i], arrival[i], serv_rn[i], service[i], begin[i], wait[i], end[i], system[i]);
+    }
+    printf("OK: WAITED_PERCENT %.2f\n", 100.0 * waited / n);
+    printf("OK: SERVER_UTILIZATION %.2f\n", (double)total_service / end[n-1]);
+    printf("OK: AVG_SYSTEM_TIME %.2f\n", (double)total_sys / n);
+    printf("OK: AVG_QUEUE_TIME %.2f\n", (double)total_wait / n);
+    printf("OK: EXPECTED_INTERARRIVAL 4.50 VAR_INTERARRIVAL 5.25 STD_INTERARRIVAL %.2f CV_INTERARRIVAL %.2f\n", sqrt(5.25), sqrt(5.25)/4.5);
+
+    int service_values[] = {1,2,3,4,5,6};
+    double p[] = {0.10,0.20,0.30,0.25,0.10,0.05};
+    double es = 0, es2 = 0;
+    for (int i = 0; i < 6; i++) { es += service_values[i] * p[i]; es2 += service_values[i] * service_values[i] * p[i]; }
+    double vs = es2 - es * es;
+    printf("OK: EXPECTED_SERVICE %.2f VAR_SERVICE %.2f STD_SERVICE %.2f CV_SERVICE %.2f\n", es, vs, sqrt(vs), sqrt(vs)/es);
+    return 0;
+}
+EOF_CODE_3
+)
+
+code[4]=$(cat <<'EOF_CODE_4'
+import matplotlib.pyplot as plt
+
+
+def print_plot(arrival, end, n, T):
+    # ------------------------------------------------------------
+    # Step 1: Collect all important time points
+    # Important time points are:
+    # 1. simulation starting time
+    # 2. simulation ending time
+    # 3. all arrival times
+    # 4. all service ending/departure times
+    # ------------------------------------------------------------
+    times = [0, T]
+
+    for i in range(n):
+        times.append(arrival[i])
+        times.append(end[i])
+
+    # ------------------------------------------------------------
+    # Step 2: Sort the time points and remove duplicate values
+    # This is similar to qsort + unique array in the C code
+    # ------------------------------------------------------------
+    unique_times = sorted(set(times))
+
+    # These lists will be used for drawing the step graph
+    x_points = []
+    y_points = []
+
+    print("TIME NUMBER_IN_SYSTEM")
+
+    # ------------------------------------------------------------
+    # Step 3: Count number of customers in the system at each time
+    # A customer is inside the system if:
+    # arrival_time <= current_time AND end_time > current_time
+    # ------------------------------------------------------------
+    for t in unique_times:
+        count = 0
+
+        for j in range(n):
+            if arrival[j] <= t and end[j] > t:
+                count += 1
+
+        print(f"PLOT {t} {count}")
+
+        x_points.append(t)
+        y_points.append(count)
+
+    print("OK: USE_THESE_POINTS_FOR_STEP_GRAPH")
+
+    # ------------------------------------------------------------
+    # Step 4: Draw the step graph
+    # X-axis = Time
+    # Y-axis = Number of customers in system
+    # ------------------------------------------------------------
+    plt.figure(figsize=(10, 5))
+    plt.step(x_points, y_points, where="post", marker="o")
+
+    plt.xlabel("Time")
+    plt.ylabel("Number of Customers in System")
+    plt.title("Q5: Time vs Number of Customers in System")
+    plt.grid(True)
+
+    # ------------------------------------------------------------
+    # Step 5: Save the graph as PNG
+    # No Output.txt will be created
+    # ------------------------------------------------------------
+    plt.savefig("q05_time_vs_number_in_system.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def main():
+    # ------------------------------------------------------------
+    # Hardcoded data from the given C code
+    # No input is taken from Input.txt
+    # ------------------------------------------------------------
+    arrival = [0, 2, 6, 7, 9, 15]
+    end = [2, 3, 9, 11, 12, 19]
+
+    n = 6
+    T = 19
+
+    print_plot(arrival, end, n, T)
+
+    print("SUCCESS: PNG graph generated -> q05_time_vs_number_in_system.png")
+
+
+if __name__ == "__main__":
+    main()
+EOF_CODE_4
+)
+
+code[5]=$(cat <<'EOF_CODE_5'
+import matplotlib.pyplot as plt
+
+
+def print_plot(arrival, end, n, T):
+    # ------------------------------------------------------------
+    # Step 1: Collect all important time points
+    # Important time points are:
+    # 1. simulation starting time
+    # 2. simulation ending time
+    # 3. all arrival times
+    # 4. all service ending/departure times
+    # ------------------------------------------------------------
+    times = [0, T]
+
+    for i in range(n):
+        times.append(arrival[i])
+        times.append(end[i])
+
+    # ------------------------------------------------------------
+    # Step 2: Sort the time points and remove duplicate values
+    # This is similar to qsort + unique array in the C code
+    # ------------------------------------------------------------
+    unique_times = sorted(set(times))
+
+    # These lists will be used for drawing the step graph
+    x_points = []
+    y_points = []
+
+    print("TIME NUMBER_IN_SYSTEM")
+
+    # ------------------------------------------------------------
+    # Step 3: Count number of customers in the system at each time
+    # A customer is inside the system if:
+    # arrival_time <= current_time AND end_time > current_time
+    # ------------------------------------------------------------
+    for t in unique_times:
+        count = 0
+
+        for j in range(n):
+            if arrival[j] <= t and end[j] > t:
+                count += 1
+
+        print(f"PLOT {t} {count}")
+
+        x_points.append(t)
+        y_points.append(count)
+
+    print("OK: USE_THESE_POINTS_FOR_STEP_GRAPH")
+
+    # ------------------------------------------------------------
+    # Step 4: Draw the step graph
+    # X-axis = Time
+    # Y-axis = Number of customers in system
+    # ------------------------------------------------------------
+    plt.figure(figsize=(10, 5))
+    plt.step(x_points, y_points, where="post", marker="o")
+
+    plt.xlabel("Time")
+    plt.ylabel("Number of Customers in System")
+    plt.title("Q6: Time vs Number of Customers in System")
+    plt.grid(True)
+
+    # ------------------------------------------------------------
+    # Step 5: Save the graph as PNG
+    # No Input.txt is used and no Output.txt will be created
+    # ------------------------------------------------------------
+    plt.savefig("q06_time_vs_number_in_system.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def main():
+    # ------------------------------------------------------------
+    # Hardcoded data from textbook Table 3.2 future event list
+    # No input is taken from Input.txt
+    #
+    # Customer arrival times:
+    # C1 = 0, C2 = 1, C3 = 2, C4 = 8, C5 = 11, C6 = 18
+    #
+    # Customer departure/service-end times:
+    # C1 = 4, C2 = 6, C3 = 11, C4 = 15, C5 = 16, C6 = 23
+    # ------------------------------------------------------------
+    arrival = [0, 1, 2, 8, 11, 18]
+    end = [4, 6, 11, 15, 16, 23]
+
+    n = 6
+    T = 23
+
+    print_plot(arrival, end, n, T)
+
+    print("SUCCESS: PNG graph generated -> q06_time_vs_number_in_system.png")
+
+
+if __name__ == "__main__":
+    main()
+EOF_CODE_5
+)
+
+code[6]=$(cat <<'EOF_CODE_6'
+#include <stdio.h>
+
+void print_table(const char *title, int arrival[], int begin[], int end[], int n) {
+    printf("CASE: %s\n", title);
+    printf("CustomerID Interarrival Arrival-Time When-Server-Available Server-Chosen Service-Time Time-Service-Begins Waiting-Time-in-Queue Time-Service-Ends Time-Customer-Spends-in-System Server-Idle-Time\n");
+    int prev_arrival = 0, prev_end = 0;
+    for (int i = 0; i < n; i++) {
+        int inter = (i == 0) ? 0 : arrival[i] - prev_arrival;
+        int available = (i == 0) ? 0 : prev_end;
+        int service = end[i] - begin[i];
+        int wait = begin[i] - arrival[i];
+        int system = end[i] - arrival[i];
+        int idle = (i == 0) ? begin[i] : (begin[i] > prev_end ? begin[i] - prev_end : 0);
+        printf("%d %d %d %d S1 %d %d %d %d %d %d\n", i+1, inter, arrival[i], available, service, begin[i], wait, end[i], system, idle);
+        prev_arrival = arrival[i];
+        prev_end = end[i];
+    }
+    printf("OK: TABLE_COMPLETED %d CUSTOMERS\n", n);
+}
+
+int main(void) {
+    int arrival[] = {0, 1, 2, 8, 11, 18};
+    int begin[]   = {0, 4, 6, 11, 15, 18};
+    int end[]     = {4, 6, 11, 15, 16, 23};
+    print_table("TEXTBOOK_TABLE_3_2", arrival, begin, end, 6);
+    return 0;
+}
+EOF_CODE_6
+)
+
+code[7]=$(cat <<'EOF_CODE_7'
+#include <stdio.h>
+
+void print_table(const char *title, int arrival[], int begin[], int end[], int n) {
+    printf("CASE: %s\n", title);
+    printf("CustomerID Interarrival Arrival-Time When-Server-Available Server-Chosen Service-Time Time-Service-Begins Waiting-Time-in-Queue Time-Service-Ends Time-Customer-Spends-in-System Server-Idle-Time\n");
+    int prev_arrival = 0, prev_end = 0;
+    for (int i = 0; i < n; i++) {
+        int inter = (i == 0) ? 0 : arrival[i] - prev_arrival;
+        int available = (i == 0) ? 0 : prev_end;
+        int service = end[i] - begin[i];
+        int wait = begin[i] - arrival[i];
+        int system = end[i] - arrival[i];
+        int idle = (i == 0) ? begin[i] : (begin[i] > prev_end ? begin[i] - prev_end : 0);
+        printf("%d %d %d %d S1 %d %d %d %d %d %d\n", i+1, inter, arrival[i], available, service, begin[i], wait, end[i], system, idle);
+        prev_arrival = arrival[i];
+        prev_end = end[i];
+    }
+    printf("OK: TABLE_COMPLETED %d CUSTOMERS\n", n);
+}
+
+int main(void) {
+    int arrival[] = {0, 2, 6, 7, 9, 15};
+    int begin[]   = {0, 2, 6, 9, 11, 15};
+    int end[]     = {2, 3, 9, 11, 12, 19};
+    print_table("FIGURE_2_6", arrival, begin, end, 6);
+    return 0;
+}
+EOF_CODE_7
+)
+
+code[8]=$(cat <<'EOF_CODE_8'
+#include <stdio.h>
+
+int map_newsday(int rn) {
+    if (rn == 0) rn = 100;
+    if (rn <= 35) return 0; /* Good */
+    if (rn <= 80) return 1; /* Fair */
+    return 2;               /* Poor */
+}
+
+int map_demand(int type, int rn) {
+    if (rn == 0) rn = 100;
+    int cum[3][7] = {
+        {3, 8, 23, 43, 78, 93, 100},
+        {10, 28, 68, 88, 96, 100, 100},
+        {44, 66, 82, 94, 100, 100, 100}
+    };
+    int demand[7] = {40, 50, 60, 70, 80, 90, 100};
+    for (int i = 0; i < 7; i++) if (rn <= cum[type][i]) return demand[i];
+    return 100;
+}
+
+int main(void) {
+    int news_rn[20]   = {58,17,21,45,43,36,27,73,86,19,93,45,47,30,12,41,65,57,18,98};
+    int demand_rn[20] = {93,63,31,19,91,75,84,37,23, 2,53,96,33,86,16, 7,64,94,55,13};
+    const char *type_name[] = {"GOOD", "FAIR", "POOR"};
+    int buy = 70;
+    int buy_cost = 33, sell_price = 50, scrap_price = 5;
+    int total_profit = 0;
+
+    printf("DAY RN_TYPE TYPE RN_DEMAND DEMAND SOLD SCRAP PROFIT_CENTS\n");
+    for (int i = 0; i < 20; i++) {
+        int type = map_newsday(news_rn[i]);
+        int demand = map_demand(type, demand_rn[i]);
+        int sold = demand < buy ? demand : buy;
+        int scrap = buy - sold;
+        int profit = sold * sell_price + scrap * scrap_price - buy * buy_cost;
+        total_profit += profit;
+        printf("%d %02d %s %02d %d %d %d %d\n", i+1, news_rn[i], type_name[type], demand_rn[i], demand, sold, scrap, profit);
+    }
+    printf("OK: TOTAL_PROFIT_CENTS %d\n", total_profit);
+    printf("OK: TOTAL_PROFIT_DOLLARS %.2f\n", total_profit / 100.0);
+    return 0;
+}
+EOF_CODE_8
+)
+
+code[9]=$(cat <<'EOF_CODE_9'
+#include <stdio.h>
+
+int map_demand(int rn) {
+    if (rn == 0) rn = 100;
+    if (rn <= 10) return 0;
+    if (rn <= 35) return 1;
+    if (rn <= 70) return 2;
+    if (rn <= 91) return 3;
+    return 4;
+}
+
+int map_lead(int rn) {
+    rn %= 10;
+    if (rn >= 1 && rn <= 6) return 1;
+    if (rn >= 7 && rn <= 9) return 2;
+    return 3;
+}
+
+int main(void) {
+    int demand_rn[25] = {26,68,33,95,86,11,64,79,55,34,21,44,90, 0,36, 8,80,51,81,53,15,73,19,19,44};
+    int lead_rn[5] = {5, 0, 3, 4, 7};
+    int M = 11, N = 5;
+    int inventory = 3, shortage = 0;
+    int order_qty = 8, days_until_arrival = 2;
+    int lead_index = 0;
+    int total_ending = 0, total_demand = 0, total_shortage = 0;
+
+    printf("DAY CYCLE DAY_IN_CYCLE BEGIN_INV RN_DEMAND DEMAND END_INV SHORTAGE ORDER_QTY RN_LEAD LEAD DAYS_UNTIL_ARRIVAL\n");
+    for (int day = 1; day <= 25; day++) {
+        int cycle = (day - 1) / N + 1;
+        int day_in_cycle = (day - 1) % N + 1;
+        if (days_until_arrival == 0 && order_qty > 0) {
+            inventory += order_qty;
+            order_qty = 0;
+        }
+        int begin_inv = inventory;
+        int demand = map_demand(demand_rn[day - 1]);
+        total_demand += demand;
+
+        if (inventory >= demand) {
+            inventory -= demand;
+            shortage = 0;
+        } else {
+            shortage = demand - inventory;
+            inventory = 0;
+        }
+        total_ending += inventory;
+        total_shortage += shortage;
+
+        int rn_lead = -1, lead = -1, placed_order = 0;
+        if (day_in_cycle == N) {
+            placed_order = M - inventory + shortage;
+            order_qty = placed_order;
+            rn_lead = lead_rn[lead_index++ % 5];
+            lead = map_lead(rn_lead);
+            days_until_arrival = lead;
+        }
+
+        printf("%d %d %d %d %02d %d %d %d %d ", day, cycle, day_in_cycle, begin_inv, demand_rn[day-1], demand, inventory, shortage, placed_order);
+        if (rn_lead >= 0) printf("%d %d %d\n", rn_lead, lead, days_until_arrival);
+        else printf("- - %d\n", days_until_arrival);
+
+        if (days_until_arrival > 0) days_until_arrival--;
+    }
+
+    printf("OK: AVG_ENDING_INVENTORY %.2f\n", total_ending / 25.0);
+    printf("OK: AVG_DEMAND %.2f\n", total_demand / 25.0);
+    printf("OK: AVG_SHORTAGE %.2f\n", total_shortage / 25.0);
+    printf("OK: IMPROVE_BY choosing better M,N, reducing lead time, reducing demand variability, and preventing shortage/lost sales.\n");
+    return 0;
+}
+EOF_CODE_9
+)
+
+code[10]=$(cat <<'EOF_CODE_10'
+#include <stdio.h>
+
+int life_from_rn(int rn) {
+    if (rn == 0) rn = 100;
+    if (rn <= 10) return 1000;
+    if (rn <= 23) return 1100;
+    if (rn <= 48) return 1200;
+    if (rn <= 61) return 1300;
+    if (rn <= 70) return 1400;
+    if (rn <= 82) return 1500;
+    if (rn <= 84) return 1600;
+    if (rn <= 90) return 1700;
+    if (rn <= 95) return 1800;
+    return 1900;
+}
+
+int delay_from_rn(int rn) {
+    rn %= 10;
+    if (rn >= 1 && rn <= 6) return 5;
+    if (rn >= 7 && rn <= 9) return 10;
+    return 15;
+}
+
+void print_cost(const char *policy, int bearings, int delay, int repair) {
+    int cost_bearings = bearings * 32;
+    int cost_delay = delay * 10;
+    int cost_downtime_repair = repair * 10;
+    double cost_repairperson = repair * 30.0 / 60.0;
+    double total = cost_bearings + cost_delay + cost_downtime_repair + cost_repairperson;
+    printf("POLICY: %s\n", policy);
+    printf("OK: TOTAL_BEARINGS %d\n", bearings);
+    printf("OK: TOTAL_DELAY_TIME %d MINUTES\n", delay);
+    printf("OK: TOTAL_REPAIR_TIME %d MINUTES\n", repair);
+    printf("OK: COST_BEARINGS %d\n", cost_bearings);
+    printf("OK: COST_DELAY_TIME %d\n", cost_delay);
+    printf("OK: COST_DOWNTIME_DURING_REPAIR %d\n", cost_downtime_repair);
+    printf("OK: COST_REPAIRPERSON %.2f\n", cost_repairperson);
+    printf("OK: TOTAL_COST %.2f\n\n", total);
+}
+
+int main(void) {
+    int life1[5][3] = {{67,71,18},{55,21,65},{98,79,54},{76,88,75},{53,93,84}};
+    int delay1[5][3] = {{7,8,5},{3,3,8},{1,1,3},{6,5,9},{4,9,2}};
+    int delay_current = 0;
+    printf("CURRENT_POLICY_DETAIL STEP BEARING LIFE_RN LIFE DELAY_RN DELAY\n");
+    for (int i = 0; i < 5; i++) {
+        for (int b = 0; b < 3; b++) {
+            int life = life_from_rn(life1[i][b]);
+            int delay = delay_from_rn(delay1[i][b]);
+            delay_current += delay;
+            printf("%d %d %d %d %d %d\n", i+1, b+1, life1[i][b], life, delay1[i][b], delay);
+        }
+    }
+    print_cost("CURRENT_REPLACE_ONLY_FAILED_BEARING", 15, delay_current, 15 * 20);
+
+    int delay2[5] = {5,8,3,9,2};
+    int delay_proposed = 0;
+    printf("PROPOSED_POLICY_DETAIL STEP LIFE1 LIFE2 LIFE3 FIRST_FAILURE DELAY\n");
+    for (int i = 0; i < 5; i++) {
+        int l1 = life_from_rn(life1[i][0]);
+        int l2 = life_from_rn(life1[i][1]);
+        int l3 = life_from_rn(life1[i][2]);
+        int first = l1;
+        if (l2 < first) first = l2;
+        if (l3 < first) first = l3;
+        int d = delay_from_rn(delay2[i]);
+        delay_proposed += d;
+        printf("%d %d %d %d %d %d\n", i+1, l1, l2, l3, first, d);
+    }
+    print_cost("PROPOSED_REPLACE_ALL_THREE", 15, delay_proposed, 5 * 40);
+    printf("OK: BETTER_POLICY PROPOSED_REPLACE_ALL_THREE\n");
+    return 0;
+}
+EOF_CODE_10
+)
+
+code[11]=$(cat <<'EOF_CODE_11'
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+double mean_int(int a[], int n) {
+    double s = 0;
+    for (int i = 0; i < n; i++) s += a[i];
+    return s / n;
+}
+
+double variance_int(int a[], int n) {
+    double m = mean_int(a, n), s = 0;
+    for (int i = 0; i < n; i++) s += (a[i] - m) * (a[i] - m);
+    return s / n;
+}
+
+int cmp_int(const void *a, const void *b) {
+    return (*(int *)a - *(int *)b);
+}
+
+double time_average(int start[], int end[], int n, int T) {
+    int times[256], m = 0;
+    times[m++] = 0;
+    times[m++] = T;
+    for (int i = 0; i < n; i++) {
+        times[m++] = start[i];
+        times[m++] = end[i];
+    }
+    qsort(times, m, sizeof(int), cmp_int);
+    int unique[256], u = 0;
+    for (int i = 0; i < m; i++) {
+        if (i == 0 || times[i] != times[i - 1]) unique[u++] = times[i];
+    }
+
+    double area = 0.0;
+    for (int i = 0; i < u - 1; i++) {
+        int t1 = unique[i], t2 = unique[i + 1];
+        int count = 0;
+        for (int j = 0; j < n; j++) {
+            if (start[j] <= t1 && end[j] > t1) count++;
+        }
+        area += count * (t2 - t1);
+    }
+    return area / T;
+}
+
+void solve(const char *title, int arrival[], int begin[], int end[], int n) {
+    int service[64], wait[64], system[64], inter[64];
+    int waited = 0, total_service = 0, total_wait = 0, total_system = 0;
+    int q_start[64], q_end[64], qn = 0;
+
+    inter[0] = arrival[0];
+    for (int i = 0; i < n; i++) {
+        service[i] = end[i] - begin[i];
+        wait[i] = begin[i] - arrival[i];
+        system[i] = end[i] - arrival[i];
+        if (i > 0) inter[i] = arrival[i] - arrival[i - 1];
+        if (wait[i] > 0) {
+            waited++;
+            q_start[qn] = arrival[i];
+            q_end[qn] = begin[i];
+            qn++;
+        }
+        total_service += service[i];
+        total_wait += wait[i];
+        total_system += system[i];
+    }
+
+    int T = end[n - 1];
+    double L = time_average(arrival, end, n, T);
+    double Lq = qn ? time_average(q_start, q_end, qn, T) : 0.0;
+    double util = (double)total_service / T;
+    double var_inter = variance_int(inter + 1, n - 1);
+    double var_service = variance_int(service, n);
+    double var_system = variance_int(system, n);
+
+    printf("CASE: %s\n", title);
+    printf("CUSTOMER ARRIVAL BEGIN END SERVICE WAIT SYSTEM\n");
+    for (int i = 0; i < n; i++) {
+        printf("%d %d %d %d %d %d %d\n", i + 1, arrival[i], begin[i], end[i], service[i], wait[i], system[i]);
+    }
+
+    printf("OK: WAITED_PERCENT %.2f\n", 100.0 * waited / n);
+    printf("OK: SERVER_UTILIZATION %.2f\n", util);
+    printf("OK: AVG_SYSTEM_TIME %.2f\n", (double)total_system / n);
+    printf("OK: AVG_QUEUE_TIME %.2f\n", (double)total_wait / n);
+    printf("OK: AVG_INTERARRIVAL_TIME %.2f\n", mean_int(inter + 1, n - 1));
+    printf("OK: AVG_SERVICE_TIME %.2f\n", mean_int(service, n));
+    printf("OK: EXPECTED_INTERARRIVAL_TIME %.2f\n", mean_int(inter + 1, n - 1));
+    printf("OK: EXPECTED_SERVICE_TIME %.2f\n", mean_int(service, n));
+    printf("OK: VAR_INTERARRIVAL %.2f STD_INTERARRIVAL %.2f\n", var_inter, sqrt(var_inter));
+    printf("OK: VAR_SERVICE %.2f STD_SERVICE %.2f\n", var_service, sqrt(var_service));
+    printf("OK: AVG_NUMBER_SYSTEM %.2f\n", L);
+    printf("OK: AVG_NUMBER_QUEUE %.2f\n", Lq);
+
+    if (waited > 0) {
+        int waited_times[64], k = 0;
+        for (int i = 0; i < n; i++) if (wait[i] > 0) waited_times[k++] = wait[i];
+        double vw = variance_int(waited_times, k);
+        printf("OK: AVG_WAIT_OF_WAITED %.2f STD_WAIT_OF_WAITED %.2f\n", mean_int(waited_times, k), sqrt(vw));
+    } else {
+        printf("OK: AVG_WAIT_OF_WAITED 0.00 STD_WAIT_OF_WAITED 0.00\n");
+    }
+
+    printf("OK: VAR_SYSTEM_TIME %.2f CV_SYSTEM_TIME %.2f\n", var_system,
+           mean_int(system, n) == 0 ? 0.0 : sqrt(var_system) / mean_int(system, n));
+}
+
+int main(void) {
+    int arrival[] = {0, 1, 2, 8, 11, 18};
+    int begin[]   = {0, 4, 6, 11, 15, 18};
+    int end[]     = {4, 6, 11, 15, 16, 23};
+    solve("TEXTBOOK_TABLE_3_2", arrival, begin, end, 6);
+
+    int max_queue = 0, sum_response = 0, count_ge5 = 0, departures = 6;
+    for (int i = 0; i < 6; i++) {
+        int response = end[i] - arrival[i];
+        sum_response += response;
+        if (response >= 5) count_ge5++;
+    }
+    int clock[] = {0,1,2,4,6,8,11,15,16,18,23};
+    for (int c = 0; c < 11; c++) {
+        int q = 0;
+        for (int i = 0; i < 6; i++) if (arrival[i] <= clock[c] && begin[i] > clock[c]) q++;
+        if (q > max_queue) max_queue = q;
+    }
+    printf("OK: MAX_QUEUE_LENGTH %d\n", max_queue);
+    printf("OK: SUM_CUSTOMER_RESPONSE_TIME %d\n", sum_response);
+    printf("OK: CUSTOMERS_SPEND_5_OR_MORE %d\n", count_ge5);
+    printf("OK: TOTAL_DEPARTURES %d\n", departures);
+    return 0;
+}
+EOF_CODE_11
+)
+
+code[12]=$(cat <<'EOF_CODE_12'
+#include <stdio.h>
+#include <string.h>
+
+int main(void) {
+    int n = 6;
+    int arrival[] = {0,2,6,7,9,15};
+    int begin[]   = {0,2,6,9,11,15};
+    int end[]     = {2,3,9,11,12,19};
+    int clocks[]  = {0,2,3,6,7,9,11,12,15,19};
+    int m = 10;
+    int total_busy = 0, max_q = 0, response_sum = 0, ge4 = 0, dep = 0;
+
+    printf("Clock Queue-State Server-State Future-Event-List Busy-Time Maximum-Queue-Length Departed-Response-Time Customers-4-or-more Total-Departures\n");
+    for (int c = 0; c < m; c++) {
+        int t = clocks[c];
+        int q = 0, server = 0;
+        char fel[512] = "";
+        for (int i = 0; i < n; i++) {
+            if (arrival[i] <= t && begin[i] > t) q++;
+            if (begin[i] <= t && end[i] > t) server = 1;
+            if (arrival[i] >= t) { char buf[32]; sprintf(buf, "(A,%d,C%d) ", arrival[i], i+1); strcat(fel, buf); }
+            if (end[i] >= t) { char buf[32]; sprintf(buf, "(D,%d,C%d) ", end[i], i+1); strcat(fel, buf); }
+        }
+        if (q > max_q) max_q = q;
+        dep = 0; response_sum = 0; ge4 = 0; total_busy = 0;
+        for (int i = 0; i < n; i++) {
+            if (end[i] <= t) {
+                int r = end[i] - arrival[i];
+                dep++;
+                response_sum += r;
+                if (r >= 4) ge4++;
+            }
+            int a = begin[i], b = end[i];
+            if (a < t) total_busy += (b < t ? b : t) - a;
+        }
+        printf("%d %d %d %s %d %d %d %d %d\n", t, q, server, fel[0] ? fel : "****", total_busy, max_q, response_sum, ge4, dep);
+    }
+    printf("OK: FUTURE_EVENT_LIST_TABLE_COMPLETED\n");
+    return 0;
+}
+EOF_CODE_12
+)
+
+code[13]=$(cat <<'EOF_CODE_13'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int map_interarrival(int rn) {
+    rn %= 1000;
+    if (rn <= 125) return 1; if (rn <= 250) return 2; if (rn <= 375) return 3; if (rn <= 500) return 4;
+    if (rn <= 625) return 5; if (rn <= 750) return 6; if (rn <= 875) return 7; return 8;
+}
+int map_service(int rn) {
+    rn %= 100; if (rn == 0) rn = 100;
+    if (rn <= 10) return 1; if (rn <= 30) return 2; if (rn <= 60) return 3;
+    if (rn <= 85) return 4; if (rn <= 95) return 5; return 6;
+}
+unsigned int seed = 12345;
+int rnd(int mod) { seed = seed * 1103515245u + 12345u; return (seed / 65536u) % mod; }
+
+int main(int argc, char *argv[]) {
+    int n = 100;
+    for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "--customers")) n = atoi(argv[++i]);
+    if (n < 1 || n > 10000) { fprintf(stderr, "ERROR: E_RANGE: customers must be in 1..10000\n"); return 1; }
+
+    int arrival = 0, prev_end = 0, waited = 0, total_wait = 0, total_sys = 0, total_service = 0, total_idle = 0;
+    printf("CustomerID Interarrival Arrival Service Begin Wait End System Idle\n");
+    for (int i = 1; i <= n; i++) {
+        int inter = (i == 1) ? 0 : map_interarrival(rnd(1000));
+        int service = map_service(rnd(100));
+        arrival += inter;
+        int begin = arrival > prev_end ? arrival : prev_end;
+        int wait = begin - arrival;
+        int end = begin + service;
+        int idle = begin > prev_end ? begin - prev_end : 0;
+        printf("%d %d %d %d %d %d %d %d %d\n", i, inter, arrival, service, begin, wait, end, end-arrival, idle);
+        if (wait > 0) waited++;
+        total_wait += wait; total_sys += end - arrival; total_service += service; total_idle += idle; prev_end = end;
+    }
+    printf("OK: AVG_WAIT %.2f\n", total_wait/(double)n);
+    printf("OK: PROBABILITY_WAIT %.2f\n", waited/(double)n);
+    printf("OK: SERVER_UTILIZATION %.2f\n", total_service/(double)prev_end);
+    printf("OK: AVG_SYSTEM_TIME %.2f\n", total_sys/(double)n);
+    printf("OK: TOTAL_IDLE_TIME %d\n", total_idle);
+    return 0;
+}
+EOF_CODE_13
+)
+
+code[14]=$(cat <<'EOF_CODE_14'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int map_interarrival(int rn) { rn%=1000; if(rn<=125)return 1; if(rn<=250)return 2; if(rn<=375)return 3; if(rn<=500)return 4; if(rn<=625)return 5; if(rn<=750)return 6; if(rn<=875)return 7; return 8; }
+int map_service(int rn) { rn%=100; if(rn==0)rn=100; if(rn<=10)return 1; if(rn<=30)return 2; if(rn<=60)return 3; if(rn<=85)return 4; if(rn<=95)return 5; return 6; }
+unsigned int seed = 55555;
+int rnd(int mod) { seed = seed * 1103515245u + 12345u; return (seed/65536u)%mod; }
+
+int main(void) {
+    int closing_time = 60 * 60; /* 60 hours in minutes */
+    int arrival = 0, prev_end = 0, served = 0, total_wait = 0, total_service = 0;
+    printf("CustomerID Arrival Service Begin Wait End Status\n");
+    while (1) {
+        int inter = (served == 0) ? 0 : map_interarrival(rnd(1000));
+        arrival += inter;
+        if (arrival > closing_time) break; /* no new customer after 60 hours */
+        int service = map_service(rnd(100));
+        int begin = arrival > prev_end ? arrival : prev_end;
+        int wait = begin - arrival;
+        int end = begin + service;
+        served++;
+        printf("%d %d %d %d %d %d ACCEPTED\n", served, arrival, service, begin, wait, end);
+        total_wait += wait; total_service += service; prev_end = end;
+    }
+    printf("OK: SIMULATION_ACCEPTS_CUSTOMERS_UNTIL %d MINUTES\n", closing_time);
+    printf("OK: LAST_DEPARTURE_AFTER_DRAINING_QUEUE %d MINUTES\n", prev_end);
+    printf("OK: CUSTOMERS_SERVED %d\n", served);
+    printf("OK: AVG_WAIT %.2f\n", served ? total_wait/(double)served : 0.0);
+    printf("OK: SERVER_UTILIZATION_DURING_OPEN_PERIOD %.2f\n", total_service/(double)closing_time);
+    return 0;
+}
+EOF_CODE_14
+)
+
+code[15]=$(cat <<'EOF_CODE_15'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int interarrival(int rn) { rn%=100; if(rn==0)rn=100; if(rn<=25)return 1; if(rn<=65)return 2; if(rn<=85)return 3; return 4; }
+int service_able(int rn) { rn%=100; if(rn==0)rn=100; if(rn<=30)return 2; if(rn<=58)return 3; if(rn<=83)return 4; return 5; }
+int service_baker(int rn) { rn%=100; if(rn==0)rn=100; if(rn<=35)return 3; if(rn<=60)return 4; if(rn<=80)return 5; return 6; }
+unsigned int seed = 24681357;
+int rnd100(void) { seed = seed * 1103515245u + 12345u; return ((seed/65536u)%100) + 1; }
+
+int main(int argc, char *argv[]) {
+    int n = 100;
+    for (int i = 1; i < argc; i++) if (!strcmp(argv[i], "--callers")) n = atoi(argv[++i]);
+    if (n < 1 || n > 10000) { fprintf(stderr, "ERROR: E_RANGE: callers must be in 1..10000\n"); return 1; }
+    int arrival = 0, able_free = 0, baker_free = 0;
+    int able_busy = 0, baker_busy = 0, total_wait = 0, total_system = 0, able_count = 0, baker_count = 0;
+    printf("Caller Interarrival Arrival Server Service Begin Wait End System\n");
+    for (int i = 1; i <= n; i++) {
+        int ia = (i == 1) ? 0 : interarrival(rnd100());
+        arrival += ia;
+        int server, service, begin, end;
+        if (able_free <= arrival) {
+            server = 1; service = service_able(rnd100()); begin = arrival; end = begin + service; able_free = end; able_busy += service; able_count++;
+        } else if (baker_free <= arrival) {
+            server = 2; service = service_baker(rnd100()); begin = arrival; end = begin + service; baker_free = end; baker_busy += service; baker_count++;
+        } else if (able_free <= baker_free) {
+            server = 1; service = service_able(rnd100()); begin = able_free; end = begin + service; able_free = end; able_busy += service; able_count++;
+        } else {
+            server = 2; service = service_baker(rnd100()); begin = baker_free; end = begin + service; baker_free = end; baker_busy += service; baker_count++;
+        }
+        int wait = begin - arrival;
+        total_wait += wait; total_system += end - arrival;
+        printf("%d %d %d %s %d %d %d %d %d\n", i, ia, arrival, server==1?"ABLE":"BAKER", service, begin, wait, end, end-arrival);
+    }
+    int final_time = able_free > baker_free ? able_free : baker_free;
+    printf("OK: ABLE_CALLS %d BAKER_CALLS %d\n", able_count, baker_count);
+    printf("OK: AVG_CALLER_DELAY %.2f\n", total_wait/(double)n);
+    printf("OK: AVG_SYSTEM_TIME %.2f\n", total_system/(double)n);
+    printf("OK: ABLE_UTILIZATION %.2f\n", able_busy/(double)final_time);
+    printf("OK: BAKER_UTILIZATION %.2f\n", baker_busy/(double)final_time);
+    return 0;
+}
+EOF_CODE_15
+)
+
+code[16]=$(cat <<'EOF_CODE_16'
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+int cmp_double(const void *a, const void *b) {
+    double x = *(double*)a, y = *(double*)b;
+    return (x > y) - (x < y);
+}
+
+int main(void) {
+    double x[] = {0.41, 0.86, 0.17, 0.05, 0.93, 0.34};
+    int n = 6;
+    double dplus = 0, dminus = 0;
+    qsort(x, n, sizeof(double), cmp_double);
+    printf("i Ri i/n D_PLUS (i-1)/n D_MINUS\n");
+    for (int i = 1; i <= n; i++) {
+        double dp = i/(double)n - x[i-1];
+        double dm = x[i-1] - (i-1)/(double)n;
+        if (dp > dplus) dplus = dp;
+        if (dm > dminus) dminus = dm;
+        printf("%d %.2f %.4f %.4f %.4f %.4f\n", i, x[i-1], i/(double)n, dp, (i-1)/(double)n, dm);
+    }
+    double D = dplus > dminus ? dplus : dminus;
+    double critical = 0.669; /* K-S critical value for n=6, alpha=0.01 */
+    printf("OK: D_PLUS %.4f\n", dplus);
+    printf("OK: D_MINUS %.4f\n", dminus);
+    printf("OK: D %.4f\n", D);
+    printf("OK: CRITICAL_0_01 %.4f\n", critical);
+    printf("OK: DECISION %s\n", D < critical ? "ACCEPT_UNIFORMITY" : "REJECT_UNIFORMITY");
+    return 0;
+}
+EOF_CODE_16
+)
+
+code[17]=$(cat <<'EOF_CODE_17'
+#include <stdio.h>
+#include <math.h>
+
+int main(void) {
+    double r[] = {0.34,0.90,0.25,0.89,0.87,0.44,0.12,0.21,0.46,0.67,
+                  0.83,0.76,0.79,0.64,0.70,0.81,0.94,0.74,0.22,0.74,
+                  0.96,0.99,0.77,0.67,0.56,0.41,0.52,0.73,0.99,0.02,
+                  0.47,0.30,0.17,0.82,0.56,0.05,0.45,0.31,0.78,0.05,
+                  0.79,0.71,0.23,0.19,0.82,0.93,0.65,0.37,0.39,0.42};
+    int n = 50, k = 10, obs[10] = {0};
+    for (int i = 0; i < n; i++) {
+        int b = (int)(r[i] * k);
+        if (b == k) b = k - 1;
+        obs[b]++;
+    }
+    double expected = n / (double)k;
+    double chi = 0;
+    printf("INTERVAL OBS EXPECTED CONTRIBUTION\n");
+    for (int i = 0; i < k; i++) {
+        double c = (obs[i] - expected) * (obs[i] - expected) / expected;
+        chi += c;
+        printf("%.1f-%.1f %d %.2f %.4f\n", i/10.0, (i+1)/10.0, obs[i], expected, c);
+    }
+    double critical = 16.919; /* df=9, alpha=0.05 */
+    printf("OK: CHI_SQUARE %.4f\n", chi);
+    printf("OK: CRITICAL_0_05_DF9 %.4f\n", critical);
+    printf("OK: DECISION %s\n", chi < critical ? "ACCEPT_UNIFORMITY" : "REJECT_UNIFORMITY");
+    return 0;
+}
+EOF_CODE_17
+)
+
+code[18]=$(cat <<'EOF_CODE_18'
+#include <stdio.h>
+#include <math.h>
+
+int main(void) {
+    double r[] = {0.2357, 0.4146, 0.3353, 0.9952};
+    int n = 4;
+    printf("CAR RANDOM_NUMBER INTERARRIVAL_TIME\n");
+    for (int i = 0; i < n; i++) {
+        double x = 3.0 * sqrt(r[i]); /* F(x)=x^2/9, so x=sqrt(9R)=3sqrt(R) */
+        printf("%d %.4f %.4f\n", i+1, r[i], x);
+    }
+    printf("OK: INVERSE_FORMULA x = 3*sqrt(R)\n");
+    return 0;
+}
+EOF_CODE_18
+)
+
+code[19]=$(cat <<'EOF_CODE_19'
+import math
+import matplotlib.pyplot as plt
+
+
+def main():
+    # ------------------------------------------------------------
+    # Given observed data
+    # No input is taken from Input.txt
+    # ------------------------------------------------------------
+    x = [
+        99.79, 99.56, 100.17, 100.33,
+        100.26, 100.31, 99.98, 99.83,
+        101.23, 100.27, 100.02, 100.47,
+        99.55, 99.62, 99.65, 99.82
+    ]
+
+    n = len(x)
+
+    # ------------------------------------------------------------
+    # Step 1: Calculate sample mean
+    # This mean is used as the exponential distribution parameter
+    # in the quantile formula.
+    # ------------------------------------------------------------
+    sample_mean = sum(x) / n
+
+    # ------------------------------------------------------------
+    # Step 2: Sort observed data
+    # This is equivalent to qsort() in C
+    # ------------------------------------------------------------
+    sorted_x = sorted(x)
+
+    # Lists for drawing Q-Q plot
+    exponential_quantiles = []
+    observed_values = []
+
+    print("i Probability Sorted_Observed Exponential_Quantile")
+
+    # ------------------------------------------------------------
+    # Step 3: Calculate probability and exponential quantile
+    #
+    # Probability:
+    # p = (i - 0.5) / n
+    #
+    # Exponential quantile:
+    # q = -mean * ln(1 - p)
+    # ------------------------------------------------------------
+    for i in range(1, n + 1):
+        p = (i - 0.5) / n
+        q = -sample_mean * math.log(1 - p)
+
+        exponential_quantiles.append(q)
+        observed_values.append(sorted_x[i - 1])
+
+        print(f"{i} {p:.4f} {sorted_x[i - 1]:.4f} {q:.4f}")
+
+    print(f"OK: SAMPLE_MEAN {sample_mean:.4f}")
+    print(
+        "OK: COMMENT If points are close to a straight line, "
+        "exponential assumption is acceptable; here values cluster near 100, "
+        "so exponential fit is weak."
+    )
+
+    # ------------------------------------------------------------
+    # Step 4: Draw Q-Q plot
+    #
+    # X-axis = theoretical exponential quantile
+    # Y-axis = sorted observed value
+    # ------------------------------------------------------------
+    plt.figure(figsize=(8, 6))
+    plt.scatter(exponential_quantiles, observed_values, marker="o")
+
+    plt.xlabel("Exponential Quantile")
+    plt.ylabel("Sorted Observed Value")
+    plt.title("Q20: Q-Q Plot for Exponential Distribution")
+    plt.grid(True)
+
+    # ------------------------------------------------------------
+    # Step 5: Save the graph as PNG
+    # No Output.txt will be created
+    # ------------------------------------------------------------
+    plt.savefig("q20_qq_plot_exponential.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print("SUCCESS: PNG graph generated -> q20_qq_plot_exponential.png")
+
+
+if __name__ == "__main__":
+    main()
+EOF_CODE_19
+)
+
+code[20]=$(cat <<'EOF_CODE_20'
+import math
+import matplotlib.pyplot as plt
+
+
+def main():
+    # ------------------------------------------------------------
+    # Given observed data
+    # No input is taken from Input.txt
+    # ------------------------------------------------------------
+    x = [
+        79.919, 3.081, 0.062, 1.961,
+        3.027, 6.505, 0.021, 0.013,
+        6.769, 59.89, 1.192, 34.76,
+        18.38, 0.141, 43.56, 24.42
+    ]
+
+    n = len(x)
+
+    # ------------------------------------------------------------
+    # Step 1: Calculate sample mean
+    # This mean is used in the exponential quantile formula.
+    # ------------------------------------------------------------
+    sample_mean = sum(x) / n
+
+    # ------------------------------------------------------------
+    # Step 2: Sort observed data
+    # This is equivalent to qsort() in C
+    # ------------------------------------------------------------
+    sorted_x = sorted(x)
+
+    # Lists for drawing Q-Q plot
+    exponential_quantiles = []
+    observed_values = []
+
+    print("i Probability Observed Exponential_Quantile")
+
+    # ------------------------------------------------------------
+    # Step 3: Calculate probability and exponential quantile
+    #
+    # Probability:
+    # p = (i - 0.5) / n
+    #
+    # Exponential quantile:
+    # q = -mean * ln(1 - p)
+    # ------------------------------------------------------------
+    for i in range(1, n + 1):
+        p = (i - 0.5) / n
+        q = -sample_mean * math.log(1 - p)
+
+        exponential_quantiles.append(q)
+        observed_values.append(sorted_x[i - 1])
+
+        print(f"{i} {p:.4f} {sorted_x[i - 1]:.4f} {q:.4f}")
+
+    print(f"OK: SAMPLE_MEAN {sample_mean:.4f}")
+    print(
+        "OK: COMMENT Use the observed-vs-theoretical pairs for the Q-Q plot; "
+        "approximate linearity supports exponential distribution."
+    )
+
+    # ------------------------------------------------------------
+    # Step 4: Draw Q-Q plot
+    #
+    # X-axis = theoretical exponential quantile
+    # Y-axis = sorted observed value
+    # ------------------------------------------------------------
+    plt.figure(figsize=(8, 6))
+    plt.scatter(exponential_quantiles, observed_values, marker="o")
+
+    plt.xlabel("Exponential Quantile")
+    plt.ylabel("Sorted Observed Value")
+    plt.title("Q21: Q-Q Plot for Exponential Distribution")
+    plt.grid(True)
+
+    # ------------------------------------------------------------
+    # Step 5: Save the graph as PNG
+    # No Output.txt will be created
+    # ------------------------------------------------------------
+    plt.savefig("q21_qq_plot_exponential.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print("SUCCESS: PNG graph generated -> q21_qq_plot_exponential.png")
+
+
+if __name__ == "__main__":
+    main()
+EOF_CODE_20
+)
+
+code[21]=$(cat <<'EOF_CODE_21'
+#include <stdio.h>
+#include <math.h>
+
+void analyze(const char *name, double x[], int n) {
+    double mu0 = 4.3, epsilon = 1.0, tcrit = 2.776;
+    double sum = 0;
+    for (int i=0;i<n;i++) sum += x[i];
+    double mean = sum/n;
+    double ss = 0;
+    for (int i=0;i<n;i++) ss += (x[i]-mean)*(x[i]-mean);
+    double sd = sqrt(ss/(n-1));
+    double se = sd/sqrt(n);
+    double half = tcrit*se;
+    double low = mean-half, high = mean+half;
+    double tstat = fabs(mean-mu0)/se;
+    printf("MODEL: %s\n", name);
+    printf("OK: MEAN %.4f SD %.4f SE %.4f\n", mean, sd, se);
+    printf("OK: CI_95 %.4f %.4f\n", low, high);
+    printf("OK: T_STAT %.4f T_CRITICAL %.4f\n", tstat, tcrit);
+    printf("OK: CONTAINS_OBSERVED_MEAN %s\n", (low <= mu0 && mu0 <= high) ? "YES" : "NO");
+    printf("OK: MEAN_WITHIN_ERROR_MARGIN %s\n\n", fabs(mean-mu0) <= epsilon ? "YES" : "NO");
+}
+
+int main(void) {
+    double first[] = {2.79,5.12,2.24,3.13,4.38};
+    double revised[] = {5.37,4.98,5.29,6.74,2.49};
+    analyze("FIRST_MODEL", first, 5);
+    analyze("REVISED_MODEL", revised, 5);
+    return 0;
+}
+EOF_CODE_21
+)
+
+code[22]=$(cat <<'EOF_CODE_22'
+#include <stdio.h>
+#include <math.h>
+
+void analyze(const char *label, double x[], int n) {
+    double tcrit = 3.18;
+    double sum=0;
+    for(int i=0;i<n;i++) sum += x[i];
+    double mean=sum/n;
+    double ss=0;
+    for(int i=0;i<n;i++) ss += (x[i]-mean)*(x[i]-mean);
+    double sd=sqrt(ss/(n-1));
+    double se=sd/sqrt(n);
+    double ci_half=tcrit*se;
+    double pi_half=tcrit*sd*sqrt(1.0+1.0/n);
+    printf("MEASURE: %s\n", label);
+    printf("OK: DEGREE_OF_FREEDOM %d\n", n-1);
+    printf("OK: MEAN %.4f SD %.4f STANDARD_ERROR %.4f\n", mean, sd, se);
+    printf("OK: CONFIDENCE_INTERVAL_95 %.4f %.4f\n", mean-ci_half, mean+ci_half);
+    printf("OK: PREDICTION_INTERVAL_95 %.4f %.4f\n\n", mean-pi_half, mean+pi_half);
+}
+
+int main(void) {
+    double util[] = {0.808,0.875,0.708,0.842};
+    double sys[]  = {3.74,4.53,3.84,3.98};
+    analyze("ABLE_UTILIZATION", util, 4);
+    analyze("ABLE_AVERAGE_SYSTEM_TIME", sys, 4);
+    return 0;
+}
+EOF_CODE_22
+)
+
+code[23]=$(cat <<'EOF_CODE_23'
+#include <stdio.h>
+#include <math.h>
+
+void analyze(const char *pair, double d[], int n) {
+    double tcrit = 2.262;
+    double sum=0;
+    for(int i=0;i<n;i++) sum+=d[i];
+    double mean=sum/n;
+    double ss=0;
+    for(int i=0;i<n;i++) ss+=(d[i]-mean)*(d[i]-mean);
+    double sd=sqrt(ss/(n-1));
+    double se=sd/sqrt(n);
+    double half=tcrit*se;
+    printf("PAIR: %s\n", pair);
+    printf("OK: POINT_ESTIMATOR %.4f\n", mean);
+    printf("OK: STANDARD_ERROR %.4f\n", se);
+    printf("OK: CI_95 %.4f %.4f\n\n", mean-half, mean+half);
+}
+
+int main(void) {
+    double d12[] = {0.66,0.46,-0.04,-0.77,-0.50,-0.99,0.71,0.44,1.62,6.41};
+    double d13[] = {5.98,2.59,3.76,1.23,2.48,5.40,2.71,6.12,6.66,19.93};
+    double d14[] = {1.09,0.68,0.41,-0.41,-0.36,-0.21,0.80,1.15,1.83,7.60};
+    analyze("MODEL_1_MINUS_MODEL_2", d12, 10);
+    analyze("MODEL_1_MINUS_MODEL_3", d13, 10);
+    analyze("MODEL_1_MINUS_MODEL_4", d14, 10);
+    printf("OK: BEST_MODEL MODEL_3\n");
+    printf("OK: REASON Model 3 has the largest positive reduction in response time versus Model 1.\n");
+    return 0;
+}
+EOF_CODE_23
+)
+
+code[24]=$(cat <<'EOF_CODE_24'
+#include <stdio.h>
+
+int main(void) {
+    double x[] = {100,100,100,150,150,150,200,200,200,250,250,250,300,300,300};
+    double y[] = {8.3,7.9,7.4,9.6,8.5,9.2,10.9,13.5,11.3,12.7,14.6,15.7,16.5,17.5,18.3};
+    int n = 15;
+    double sx=0, sy=0;
+    for(int i=0;i<n;i++){ sx+=x[i]; sy+=y[i]; }
+    double xb=sx/n, yb=sy/n;
+    double sxx=0, sxy=0;
+    for(int i=0;i<n;i++){ sxx+=(x[i]-xb)*(x[i]-xb); sxy+=(x[i]-xb)*(y[i]-yb); }
+    double beta1=sxy/sxx;
+    double beta0=yb-beta1*xb;
+    printf("OK: BETA0 %.6f\n", beta0);
+    printf("OK: BETA1 %.6f\n", beta1);
+    printf("OK: REGRESSION_EQUATION Y = %.6f + %.6f*x\n", beta0, beta1);
+    printf("CLAIMS PREDICTED_HOURS\n");
+    for(int claims=400; claims<=1000; claims+=100) {
+        printf("%d %.2f\n", claims, beta0 + beta1*claims);
+    }
+    return 0;
+}
+EOF_CODE_24
+)
+
+runner[0]=$(cat <<'EOF_RUN_0'
+gcc q01_dump_truck_probability.c -o q01 && ./q01
+EOF_RUN_0
+)
+
+runner[1]=$(cat <<'EOF_RUN_1'
+gcc q02_table_2_4_metrics.c -lm -o q02 && ./q02
+EOF_RUN_1
+)
+
+runner[2]=$(cat <<'EOF_RUN_2'
+gcc q03_figure_2_6_metrics.c -lm -o q03 && ./q03
+EOF_RUN_2
+)
+
+runner[3]=$(cat <<'EOF_RUN_3'
+gcc q04_grocery_20_customers.c -lm -o q04 && ./q04
+EOF_RUN_3
+)
+
+runner[4]=$(cat <<'EOF_RUN_4'
+python3 q05_time_vs_number_in_system.py
+EOF_RUN_4
+)
+
+runner[5]=$(cat <<'EOF_RUN_5'
+python3 q06_time_vs_number_in_system.py
+EOF_RUN_5
+)
+
+runner[6]=$(cat <<'EOF_RUN_6'
+gcc q07_customer_table_from_table_3_2.c -o q07 && ./q07
+EOF_RUN_6
+)
+
+runner[7]=$(cat <<'EOF_RUN_7'
+gcc q08_customer_table_from_figure_2_6.c -o q08 && ./q08
+EOF_RUN_7
+)
+
+runner[8]=$(cat <<'EOF_RUN_8'
+gcc q09_newspaper_profit.c -o q09 && ./q09
+EOF_RUN_8
+)
+
+runner[9]=$(cat <<'EOF_RUN_9'
+gcc q10_refrigerator_inventory.c -o q10 && ./q10
+EOF_RUN_9
+)
+
+runner[10]=$(cat <<'EOF_RUN_10'
+gcc q11_bearing_policy_comparison.c -o q11 && ./q11
+EOF_RUN_10
+)
+
+runner[11]=$(cat <<'EOF_RUN_11'
+gcc q12_table_3_2_metrics.c -lm -o q12 && ./q12
+EOF_RUN_11
+)
+
+runner[12]=$(cat <<'EOF_RUN_12'
+gcc q13_future_event_list_from_table_2_4.c -o q13 && ./q13
+EOF_RUN_12
+)
+
+runner[13]=$(cat <<'EOF_RUN_13'
+gcc q14_grocery_checkout_program.c -o q14 && ./q14 --customers 20
+EOF_RUN_13
+)
+
+runner[14]=$(cat <<'EOF_RUN_14'
+gcc q15_grocery_60_hours_drain.c -o q15 && ./q15
+EOF_RUN_14
+)
+
+runner[15]=$(cat <<'EOF_RUN_15'
+gcc q16_able_baker_call_center.c -o q16 && ./q16 --callers 20
+EOF_RUN_15
+)
+
+runner[16]=$(cat <<'EOF_RUN_16'
+gcc q17_ks_test.c -lm -o q17 && ./q17
+EOF_RUN_16
+)
+
+runner[17]=$(cat <<'EOF_RUN_17'
+gcc q18_chi_square_uniformity.c -lm -o q18 && ./q18
+EOF_RUN_17
+)
+
+runner[18]=$(cat <<'EOF_RUN_18'
+gcc q19_inverse_transform_interarrival.c -lm -o q19 && ./q19
+EOF_RUN_18
+)
+
+runner[19]=$(cat <<'EOF_RUN_19'
+python3 q20_qq_plot_exponential.py
+EOF_RUN_19
+)
+
+runner[20]=$(cat <<'EOF_RUN_20'
+python3 q21_qq_plot_exponential.py
+EOF_RUN_20
+)
+
+runner[21]=$(cat <<'EOF_RUN_21'
+gcc q22_model_validation_ci.c -lm -o q22 && ./q22
+EOF_RUN_21
+)
+
+runner[22]=$(cat <<'EOF_RUN_22'
+gcc q23_confidence_prediction_interval.c -lm -o q23 && ./q23
+EOF_RUN_22
+)
+
+runner[23]=$(cat <<'EOF_RUN_23'
+gcc q24_crn_model_comparison.c -lm -o q24 && ./q24
+EOF_RUN_23
+)
+
+runner[24]=$(cat <<'EOF_RUN_24'
+gcc q25_simple_linear_regression.c -o q25 && ./q25
+EOF_RUN_24
+)
+
+name[0]="q01_dump_truck_probability"
+name[1]="q02_table_2_4_metrics"
+name[2]="q03_figure_2_6_metrics"
+name[3]="q04_grocery_20_customers"
+name[4]="q05_time_vs_number_in_system.py"
+name[5]="q06_time_vs_number_in_system.py"
+name[6]="q07_customer_table_from_table_3_2"
+name[7]="q08_customer_table_from_figure_2_6"
+name[8]="q09_newspaper_profit"
+name[9]="q10_refrigerator_inventory"
+name[10]="q11_bearing_policy_comparison"
+name[11]="q12_table_3_2_metrics"
+name[12]="q13_future_event_list_from_table_2_4"
+name[13]="q14_grocery_checkout_program"
+name[14]="q15_grocery_60_hours_drain"
+name[15]="q16_able_baker_call_center"
+name[16]="q17_ks_test"
+name[17]="q18_chi_square_uniformity"
+name[18]="q19_inverse_transform_interarrival"
+name[19]="q20_qq_plot_exponential.py"
+name[20]="q21_qq_plot_exponential.py"
+name[21]="q22_model_validation_ci"
+name[22]="q23_confidence_prediction_interval"
+name[23]="q24_crn_model_comparison"
+name[24]="q25_simple_linear_regression"
+
+
+print_help() {
+    cat << EOF
+Usage: ./run.sh -n <index> [-p <percentage>] [-r]
+       ./run.sh --list
+       ./run.sh --write-all
+
+Options:
+  -n <index>       Index number (1-25) of the source code array
+  -p <percentage>  Percentage (1-100) of the code to extract. Default: 100
+  -r               Show compile/run command for the selected solution
+  --list           List all available simulation lab solutions
+  --write-all      Write all 25 source files into the current folder
+  -h, --help       Show this help message
+
+Examples:
+  ./run.sh --list
+  ./run.sh -n 1 -p 100 -r
+  ./run.sh --write-all
+
+Note:
+  Q5, Q6, Q20, and Q21 are Python files.
+  All other questions are C files.
+EOF
+}
+
+extract_code_percentage() {
+    local source_code="$1"
+    local percentage="$2"
+    local total_lines
+    local lines_to_extract
+
+    total_lines=$(echo "$source_code" | wc -l)
+    lines_to_extract=$((total_lines * percentage / 100))
+
+    if [ "$lines_to_extract" -lt 1 ]; then
+        lines_to_extract=1
+    fi
+
+    echo "$source_code" | head -n "$lines_to_extract"
+}
+
+source_filename() {
+    local idx="$1"
+    local base="${name[$idx]}"
+
+    if [[ "$base" == *.py ]]; then
+        echo "$base"
+    else
+        echo "$base.c"
+    fi
+}
+
+if [ "$1" = "--list" ]; then
+    for i in "${!name[@]}"; do
+        printf "%02d %s
+" "$((i+1))" "$(source_filename "$i")"
+    done
+    exit 0
+fi
+
+if [ "$1" = "--write-all" ]; then
+    for i in "${!name[@]}"; do
+        output_filename="$(source_filename "$i")"
+        printf "%s
+" "${code[$i]}" > "$output_filename"
+        echo "✓ File created: $output_filename"
+    done
+    echo "OK: WROTE_ALL_SOLUTIONS ${#name[@]}"
+    exit 0
+fi
+
+index=""
+percentage="100"
+show_runner=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -n)
+            index="$2"
+            shift 2
+            ;;
+        -p)
+            percentage="$2"
+            shift 2
+            ;;
+        -r)
+            show_runner=true
+            shift
+            ;;
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            print_help
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$index" ]; then
+    echo "Error: -n is required unless you use --list or --write-all"
+    print_help
+    exit 1
+fi
+
+if ! [[ "$index" =~ ^[0-9]+$ ]] || [ "$index" -lt 1 ] || [ "$index" -gt 25 ]; then
+    echo "Error: Index must be between 1 and 25"
+    exit 1
+fi
+
+if ! [[ "$percentage" =~ ^[0-9]+$ ]] || [ "$percentage" -lt 1 ] || [ "$percentage" -gt 100 ]; then
+    echo "Error: Percentage must be between 1 and 100"
+    exit 1
+fi
+
+array_index=$((index - 1))
+extracted_code=$(extract_code_percentage "${code[$array_index]}" "$percentage")
+output_filename="$(source_filename "$array_index")"
+
+printf "%s
+" "$extracted_code" > "$output_filename"
+
+echo "✓ File created: $output_filename"
+echo "✓ Code extracted: $percentage% from index $index"
+
+if [ "$show_runner" = true ]; then
+    echo ""
+    echo "How to compile and run:"
+    echo "${runner[$array_index]}"
+fi
